@@ -1,0 +1,6 @@
+streamlit
+fpdf
+sounddevice
+scipy
+numpy
+pandas
