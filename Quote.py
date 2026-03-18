@@ -3,249 +3,206 @@ import streamlit.components.v1 as components
 import pandas as pd
 
 # ======================================================
-# Configuración de Página
+# 1. CONFIGURACIÓN Y ESTADO
 # ======================================================
-st.set_page_config(page_title="Quote Generator", layout="wide")
+st.set_page_config(page_title="Pro Quote Master", layout="wide")
 FLOORS = ["Basement", "Floor 1", "Floor 2", "Floor 3", "Floor 4", "Floor 5"]
 
-# ======================================================
-# Inicialización de Estado (Session State)
-# ======================================================
 if "rooms" not in st.session_state: st.session_state.rooms = []
 if "stairs" not in st.session_state: st.session_state.stairs = []
-if "active_floor" not in st.session_state: st.session_state.active_floor = "Floor 1"
-if "notes" not in st.session_state: st.session_state.notes = ""
-
-if "site_info" not in st.session_state: 
-    st.session_state.site_info = {"laundry": False, "water": False, "bathroom": False, "elevator": False}
 
 EQUIPMENT_OPTIONS = ["Truck mount", "Portable", "Cimex"]
-PRODUCT_OPTIONS = [
-    "Procyon", "Citrus", "Releasit", "Flex", "Bio Break", "Boost All", 
-    "Pure O2", "Eco Cide", "Petzap IQ", "Wool Medic", "Groutmaster", 
-    "Triplephase", "Volume 40", "Spot Stop", "Green Guard", "Rob Solvent"
-]
+PRODUCT_OPTIONS = ["Procyon", "Citrus", "Releasit", "Flex", "Bio Break", "Boost All", "Pure O2", "Eco Cide", "Petzap IQ", "Groutmaster", "Triplephase"]
+
+def safe_sum(data, key):
+    if not data: return 0
+    return pd.to_numeric(pd.DataFrame(data)[key], errors='coerce').fillna(0).sum()
 
 # ======================================================
-# Funciones Lógicas
+# 2. PHASE 1: PHYSICAL WALKTHROUGH (UNIFICADA)
 # ======================================================
-def add_room():
-    try:
-        name = st.session_state.room_name.strip()
-        width = float(st.session_state.width_input)
-        length = float(st.session_state.length_input)
-        if name:
-            st.session_state.rooms.append({
-                "floor": st.session_state.active_floor,
-                "name": name,
-                "width": width,
-                "length": length,
-                "include": st.session_state.include_input
-            })
-            st.session_state.room_name = ""; st.session_state.width_input = ""; st.session_state.length_input = ""
-    except ValueError: st.error("Invalid dimensions.")
+st.title("📏 Inspection & Quote Master")
+st.subheader("📍 Phase 1: Physical Walkthrough")
 
-def add_stair():
-    try:
-        steps = int(st.session_state.steps_input)
-        l_area = 0
-        if st.session_state.has_landing:
-            l_area = float(st.session_state.l_width) * float(st.session_state.l_length)
-        st.session_state.stairs.append({
-            "name": f"{st.session_state.s_from} to {st.session_state.s_to}",
-            "steps": steps,
-            "landing_area": round(l_area, 2)
-        })
-        st.session_state.steps_input = ""; st.session_state.l_width = ""; st.session_state.l_length = ""
-    except ValueError: st.error("Invalid stairs input.")
-
-# ======================================================
-# UI - SECCIÓN SUPERIOR
-# ======================================================
-st.title("📐 Quote & Area Calculator")
-
-col1, col2 = st.columns([1, 1.2])
-
-with col1:
-    # CUADRO: PROJECT SETUP
-    with st.container(border=True):
-        st.subheader("📋 Project Setup")
-        project_type = st.radio("Type of Project", ["House", "Office"], horizontal=True)
-        report_main_title = "HOUSE" if project_type == "House" else "OFFICE"
-        
-        office_schedule = ""
-        if project_type == "Office":
-            st.write("**Service Schedule**")
-            office_schedule = st.radio("Timing:", ["Weekdays (Regular)", "After Hours", "Weekends"], horizontal=True, label_visibility="collapsed")
-        
-        st.write("**Observations/Notes**")
-        st.text_area("Notes:", key="notes", height=80, label_visibility="collapsed", placeholder="Add any special instructions...")
-
-    # CUADRO: SITE ACCESS & LOGISTICS (ACTUALIZADO CON HORAS Y TÉCNICOS)
-    with st.container(border=True):
-        st.subheader("🚚 Logistics & Labor")
-        
-        # --- NUEVA SECCIÓN DE LABOR ---
-        c_l1, c_l2 = st.columns(2)
-        techs = c_l1.text_input("Number of Technicians", placeholder="e.g. 2")
-        hours = c_l2.text_input("Estimated Hours", placeholder="e.g. 4.5")
-        st.divider()
-        
-        c_s1, c_s2 = st.columns(2)
-        with c_s1:
-            st.write("**Access**")
-            st.session_state.site_info["laundry"] = st.checkbox("Laundry", value=st.session_state.site_info["laundry"])
-            st.session_state.site_info["water"] = st.checkbox("Water", value=st.session_state.site_info["water"])
-            st.session_state.site_info["bathroom"] = st.checkbox("Bathroom", value=st.session_state.site_info["bathroom"])
-            st.session_state.site_info["elevator"] = st.checkbox("Elevator", value=st.session_state.site_info["elevator"])
-        with c_s2:
-            st.write("**Parking**")
-            parking = st.radio("P_Select", ["Easy", "Medium", "Difficult"], horizontal=False, label_visibility="collapsed")
-            st.write("**Dirt Level**")
-            dirt = st.radio("D_Select", ["Light", "Medium", "Heavy"], horizontal=False, label_visibility="collapsed")
-
-with col2:
-    # CUADRO: EQUIPMENT & PRODUCTS
-    with st.container(border=True):
-        st.subheader("🛠️ Tools & Chemicals")
-        
-        st.write("**Equipment Used:**")
-        eq_cols = st.columns(3)
-        selected_equip = []
-        for i, opt in enumerate(EQUIPMENT_OPTIONS):
-            if eq_cols[i % 3].checkbox(opt, key=f"check_eq_{opt}"):
-                selected_equip.append(opt)
-        
-        st.divider()
-        
-        st.write("**Products Applied:**")
-        pr_cols = st.columns(4)
-        selected_prod = []
-        for i, opt in enumerate(PRODUCT_OPTIONS):
-            if pr_cols[i % 4].checkbox(opt, key=f"check_pr_{opt}"):
-                selected_prod.append(opt)
-
-st.divider()
-
-# ======================================================
-# UI - DATOS
-# ======================================================
 d_col1, d_col2 = st.columns(2)
 
 with d_col1:
     with st.container(border=True):
-        st.subheader("🏠 Rooms Breakdown")
-        st.selectbox("Select Floor", FLOORS, key="active_floor")
+        st.write("**Rooms & Floor Spaces**")
+        f_level = st.selectbox("Select Floor Level", FLOORS)
         with st.form("room_form", clear_on_submit=True):
-            st.text_input("Room Name", key="room_name")
+            r_name = st.text_input("Room Name", placeholder="Living Room, Suite A...")
             c_dim1, c_dim2 = st.columns(2)
-            c_dim1.text_input("Width (ft)", key="width_input")
-            c_dim2.text_input("Length (ft)", key="length_input")
-            st.checkbox("Include in total", key="include_input", value=True)
-            st.form_submit_button("Add Room", on_click=add_room)
+            rw = c_dim1.text_input("Width (ft)")
+            rl = c_dim2.text_input("Length (ft)")
+            if st.form_submit_button("➕ Add Area"):
+                try:
+                    area = float(rw) * float(rl)
+                    st.session_state.rooms.append({"floor": f_level, "name": r_name, "w": rw, "l": rl, "area": int(area)})
+                except: st.error("Invalid dimensions")
         
         if st.session_state.rooms:
-            df_r = pd.DataFrame(st.session_state.rooms)
-            df_r["area"] = (df_r["width"] * df_r["length"]).astype(int)
-            edited_r = st.data_editor(df_r, num_rows="dynamic", use_container_width=True, key="ed_rooms")
+            df_rooms = pd.DataFrame(st.session_state.rooms)
+            edited_r = st.data_editor(df_rooms, num_rows="dynamic", use_container_width=True, key="editor_rooms")
             st.session_state.rooms = edited_r.to_dict(orient="records")
-        else: edited_r = pd.DataFrame()
 
 with d_col2:
     with st.container(border=True):
-        st.subheader("🪜 Stairs & Landings")
+        st.write("**Stairs & Landings**")
         with st.form("stair_form", clear_on_submit=True):
             c_st1, c_st2 = st.columns(2)
-            c_st1.selectbox("From", FLOORS, key="s_from")
-            c_st2.selectbox("To", FLOORS, key="s_to")
-            st.text_input("Steps Count", key="steps_input")
-            st.checkbox("Has Landing?", key="has_landing", value=True)
-            c_l1, c_l2 = st.columns(2)
-            c_l1.text_input("Landing W", key="l_width")
-            c_l2.text_input("Landing L", key="l_length")
-            st.form_submit_button("Add Stairs", on_click=add_stair)
+            s_from = c_st1.selectbox("From Level", FLOORS)
+            s_to = c_st2.selectbox("To Level", FLOORS)
+            s_steps = st.text_input("Steps Count")
+            st.write("---")
+            st.write("**Landing Area (W x L):**")
+            l_c1, l_c2 = st.columns(2)
+            lw = l_c1.text_input("W")
+            ll = l_c2.text_input("L")
+            if st.form_submit_button("➕ Add Stairs"):
+                try:
+                    l_area = float(lw or 0) * float(ll or 0)
+                    st.session_state.stairs.append({
+                        "name": f"{s_from} to {s_to}", 
+                        "steps": int(s_steps or 0), 
+                        "l_w": lw or "0", 
+                        "l_l": ll or "0", 
+                        "l_area": int(l_area)
+                    })
+                except: st.error("Invalid input")
         
         if st.session_state.stairs:
-            edited_s = st.data_editor(pd.DataFrame(st.session_state.stairs), num_rows="dynamic", use_container_width=True, key="ed_stairs")
+            df_stairs = pd.DataFrame(st.session_state.stairs)
+            edited_s = st.data_editor(df_stairs, num_rows="dynamic", use_container_width=True, key="editor_stairs")
             st.session_state.stairs = edited_s.to_dict(orient="records")
-        else: edited_s = pd.DataFrame()
+
+st.divider()
 
 # ======================================================
-# CÁLCULOS Y REPORTE
+# 3. PHASE 2: LOGISTICS (DINÁMICA SEGÚN TIPO)
 # ======================================================
-total_carpet_area = 0; total_steps = 0; total_landing_area = 0
+st.subheader("⚙️ Phase 2: Technical Strategy & Logistics")
+p_type = st.radio("Select Project Type:", ["House", "Office"], horizontal=True)
 
-if not edited_r.empty:
-    total_carpet_area = edited_r[edited_r["include"]]["area"].sum()
+s1, s2, s3 = st.columns(3)
 
-if not edited_s.empty:
-    total_steps = pd.to_numeric(edited_s["steps"], errors='coerce').fillna(0).sum()
-    total_landing_area = pd.to_numeric(edited_s["landing_area"], errors='coerce').fillna(0).sum()
+with s1:
+    with st.container(border=True):
+        st.write("**Labor Assignment**")
+        techs = st.text_input("Technicians Assigned", placeholder="e.g. 2")
+        hours = st.text_input("Estimated Hours", placeholder="e.g. 4.5")
+        shift = ""
+        if p_type == "Office":
+            shift = st.selectbox("Shift Schedule", ["Regular Hours", "After Hours", "Weekends"])
 
-def get_status(key): return "Yes" if st.session_state.site_info.get(key) else "No"
+with s2:
+    with st.container(border=True):
+        if p_type == "Office":
+            st.write("**Logistics & Access**")
+            water = st.checkbox("Water Source Provided", value=True)
+            elev = st.checkbox("Elevator Access")
+            parking = st.radio("Parking Status", ["Easy", "Medium", "Difficult"], horizontal=True)
+            soil = st.radio("Soil Level", ["Light", "Medium", "Heavy Restoration"], horizontal=True)
+        else:
+            st.write("**Home Conditions**")
+            soil = st.radio("Soil Level", ["Light", "Medium", "Heavy Restoration"], horizontal=True)
+            pet_stains = st.checkbox("Pet Stains/Odors Present?")
+            parking = st.radio("Parking", ["Street", "Driveway"], horizontal=True)
 
-proj_info_str = report_main_title
-if project_type == "Office":
-    proj_info_str += f" ({office_schedule.upper()})"
+with s3:
+    with st.container(border=True):
+        st.write("**Technical Strategy**")
+        selected_eq = [eq for eq in EQUIPMENT_OPTIONS if st.checkbox(eq, key=f"cb_{eq}")]
+        selected_chem = st.multiselect("Chemistry Suggested", PRODUCT_OPTIONS)
+        notes = st.text_area("Field Notes (Technical Observations):")
 
-report = [
-    f"*** {report_main_title} REPORT ***",
-    "===============================",
-    f"TOTAL CARPET AREA: {int(total_carpet_area)} sq ft",
-    f"TOTAL LANDINGS: {int(total_landing_area)} sq ft",
-    f"TOTAL STEPS: {int(total_steps)}",
-    "===============================",
-    # LÍNEA DE LABOR AÑADIDA AL REPORTE
-    f"LABOR: {techs if techs else '0'} Technician(s) | EST. TIME: {hours if hours else '0'} Hours",
-    "===============================",
-    f"NOTES: {st.session_state.notes if st.session_state.notes else 'None'}",
-    "-------------------------------",
-    f"PROJECT TYPE: {proj_info_str}",
-    f"Dirt Level: {dirt} | Parking: {parking}",
-    f"Equipment: {', '.join(selected_equip) if selected_equip else 'None'}",
-    f"Products: {', '.join(selected_prod) if selected_prod else 'None'}",
-    "-------------------------------",
-    "SITE ACCESS:",
-    f" - Laundry: {get_status('laundry')}",
-    f" - Water: {get_status('water')}",
-    f" - Bathroom: {get_status('bathroom')}",
-    f" - Elevator: {get_status('elevator')}",
-    "-------------------------------",
-    "DETAILED BREAKDOWN:"
-]
+# ======================================================
+# 4. GENERACIÓN DE REPORTES DIFERENCIADOS
+# ======================================================
+total_rooms_sqft = safe_sum(st.session_state.rooms, 'area')
+total_steps_count = safe_sum(st.session_state.stairs, 'steps')
+total_landing_sqft = safe_sum(st.session_state.stairs, 'l_area')
+global_surface = int(total_rooms_sqft + total_landing_sqft)
 
-if not edited_r.empty:
-    inc_only = edited_r[edited_r["include"]]
-    if not inc_only.empty:
-        grouped = inc_only.groupby(["floor", "name"])["area"].sum().reset_index()
-        for f in FLOORS:
-            f_data = grouped[grouped["floor"] == f]
-            if not f_data.empty:
-                report.append(f"\n[{f}]")
-                for _, r in f_data.iterrows():
-                    report.append(f" - {r['name']}: {int(r['area'])} sq ft")
+if p_type == "Office":
+    # --- REPORTE OFFICE (CORPORATIVO) ---
+    report = [
+        f"*** OFFICE SERVICE INSPECTION & QUOTE ***",
+        f"Date: 03/18/2026",
+        "--------------------------------------------------------------",
+        "I. SCOPE OF WORK SUMMARY",
+        f" - Total Surface Area: {global_surface} sq ft",
+        f" - Total Steps: {int(total_steps_count)}",
+        f" - Soil Level: {soil}",
+        "--------------------------------------------------------------",
+        "II. LABOR & ESTIMATED TIME",
+        f" - Technicians Assigned: {techs if techs else '0'} Specialists",
+        f" - Estimated Production Time: {hours if hours else '0'} Hours",
+        f" - Shift Schedule: {shift}",
+        "--------------------------------------------------------------",
+        "III. LOGISTICS & SITE ACCESS",
+        f" - Water Source: {'Provided on-site' if water else 'To be determined'}",
+        f" - Elevator Access: {'Yes' if elev else 'No'}",
+        f" - Parking: {parking}",
+        "--------------------------------------------------------------",
+        "IV. TECHNICAL STRATEGY",
+        f" - Equipment: {', '.join(selected_eq) if selected_eq else 'None'}",
+        f" - Chemistry Suggested: {', '.join(selected_chem) if selected_chem else 'None'}",
+        f" - Field Notes: {notes if notes else 'No specific observations.'}",
+        "--------------------------------------------------------------"
+    ]
+else:
+    # --- REPORTE HOUSE (RESIDENCIAL) ---
+    report = [
+        f"*** RESIDENTIAL CLEANING ESTIMATE ***",
+        f"Date: 03/18/2026",
+        "--------------------------------------------------------------",
+        "SUMMARY OF AREAS",
+        f" - Total Surface to Clean: {global_surface} sq ft",
+        f" - Total Steps: {int(total_steps_count)}",
+        f" - Soil Condition: {soil}",
+        f" - Pet Treatment: {'Required' if pet_stains else 'Not requested'}",
+        "--------------------------------------------------------------",
+        "SERVICE DETAILS",
+        f" - Estimated Time: {hours if hours else '0'} Hours",
+        f" - Equipment: {', '.join(selected_eq) if selected_eq else 'Standard'}",
+        f" - Products: {', '.join(selected_chem) if selected_chem else 'Eco-friendly Professional'}",
+        "--------------------------------------------------------------",
+        "TECHNICAL NOTES",
+        f"> {notes if notes else 'Areas ready for professional cleaning.'}",
+        "--------------------------------------------------------------"
+    ]
 
-if not edited_s.empty:
-    report.append("\n[STAIRS]")
-    for _, r in edited_s.iterrows():
-        report.append(f" - {r['name']}: {r['steps']} steps (Landing: {r['landing_area']} sq ft)")
+# Sección común: Desglose Matemático
+report.append("DETAILED BREAKDOWN:")
+for f in FLOORS:
+    f_rooms = [r for r in st.session_state.rooms if r.get('floor') == f]
+    if f_rooms:
+        report.append(f"\n[{f.upper()}]")
+        for r in f_rooms:
+            report.append(f" - {r.get('name', 'Area')}: {r.get('w',0)}ft x {r.get('l',0)}ft = {int(r.get('area',0))} sq ft")
 
+if st.session_state.stairs:
+    report.append("\n[STAIRS & LANDINGS]")
+    for s in st.session_state.stairs:
+        if s.get('steps', 0) > 0 or s.get('l_area', 0) > 0:
+            report.append(f" - {s.get('name')}: {int(s.get('steps',0))} steps | Landing: {s.get('l_w',0)}ft x {s.get('l_l',0)}ft = {int(s.get('l_area',0))} sq ft")
+
+report.append("--------------------------------------------------------------")
 summary_text = "\n".join(report)
 
 # ======================================================
-# REPORTE FINAL
+# 5. UI: REPORTE FINAL Y BOTONES
 # ======================================================
 st.divider()
 with st.container(border=True):
-    st.subheader(f"📋 Final Summary: {report_main_title}")
-    st.text_area("Ready to copy:", summary_text, height=450)
-
+    st.subheader(f"📋 Final Report: {p_type}")
+    st.text_area("Ready for Client:", summary_text, height=450)
     components.html(f"""
-        <button id="copyBtn" style="padding:12px 24px;background-color:#007bff;color:white;border:none;border-radius:6px;cursor:pointer;font-weight:bold;width:100%;font-family:sans-serif;"
-        onclick="navigator.clipboard.writeText(`{summary_text}`); this.innerText='✓ Copied to Clipboard'; this.style.backgroundColor='#28a745';">
-        📎 Copy Report to Clipboard
-        </button>""", height=80)
+        <button style="padding:12px;background-color:#007bff;color:white;border:none;border-radius:6px;width:100%;font-weight:bold;cursor:pointer;font-family:sans-serif;"
+        onclick="navigator.clipboard.writeText(`{summary_text}`); this.innerText='✓ Report Copied to Clipboard'; this.style.backgroundColor='#28a745';">
+        📎 Copy Executive Report</button>""", height=70)
 
 if st.button("🗑️ Reset All Data"):
-    for key in list(st.session_state.keys()): del st.session_state[key]
+    for k in list(st.session_state.keys()): del st.session_state[k]
     st.rerun()
