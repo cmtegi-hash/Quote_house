@@ -226,29 +226,21 @@ if st.session_state.final_report:
         const btn = document.getElementById("{button_id}");
         btn.addEventListener("click", () => {{
             const text = {safe_text};
-            
-            if (navigator.clipboard && window.isSecureContext) {{
-                navigator.clipboard.writeText(text).then(() => {{
-                    btn.innerText = "✅ Copied!";
-                }}).catch(() => fallbackCopy(text));
-            }} else {{
-                fallbackCopy(text);
+            const textarea = document.createElement("textarea");
+            textarea.value = text;
+            textarea.style.position = "fixed";
+            textarea.style.opacity = "0";
+            document.body.appendChild(textarea);
+            textarea.focus();
+            textarea.select();
+            try {{
+                document.execCommand('copy');
+                btn.innerText = '✅ Copied!';
+            }} catch(err) {{
+                btn.innerText = '❌ Error';
             }}
-
-            function fallbackCopy(text) {{
-                const textarea = document.createElement("textarea");
-                textarea.value = text;
-                textarea.style.position = "fixed";
-                textarea.style.opacity = "0";
-                document.body.appendChild(textarea);
-                textarea.focus();
-                textarea.select();
-                try {{ document.execCommand("copy"); btn.innerText = "✅ Copied!"; }} 
-                catch (err) {{ btn.innerText = "Error"; }}
-                document.body.removeChild(textarea);
-            }}
-
-            setTimeout(() => {{ btn.innerText = "Copy Final Report"; }}, 2000);
+            document.body.removeChild(textarea);
+            setTimeout(() => {{ btn.innerText = 'Copy Final Report'; }}, 2000);
         }});
         </script>
     """, height=70)
