@@ -1,208 +1,213 @@
 import streamlit as st
 import streamlit.components.v1 as components
-import pandas as pd
+import re
 
-# ======================================================
-# 1. CONFIGURACIÓN Y ESTADO
-# ======================================================
-st.set_page_config(page_title="Pro Quote Master", layout="wide")
-FLOORS = ["Basement", "Floor 1", "Floor 2", "Floor 3", "Floor 4", "Floor 5"]
+st.set_page_config(page_title="Tech Service Report", layout="wide")
+st.title("🛠️ Tech Service Report & Audit")
 
-if "rooms" not in st.session_state: st.session_state.rooms = []
-if "stairs" not in st.session_state: st.session_state.stairs = []
+# --- INITIAL SESSION STATE ---
+if "template_text" not in st.session_state:
+    st.session_state["template_text"] = ""
+if "final_report" not in st.session_state:
+    st.session_state["final_report"] = ""
+if "audit_lines_h" not in st.session_state:
+    st.session_state["audit_lines_h"] = []
+if "audit_lines_s" not in st.session_state:
+    st.session_state["audit_lines_s"] = []
 
-EQUIPMENT_OPTIONS = ["Truck mount", "Portable", "Cimex"]
-PRODUCT_OPTIONS = ["Procyon", "Citrus", "Releasit", "Flex", "Bio Break", "Boost All", "Pure O2", "Eco Cide", "Petzap IQ", "Groutmaster", "Triplephase"]
+# --- MAIN INTERFACE ---
+col_gen, col_paste = st.columns([1, 2])
 
-def safe_sum(data, key):
-    if not data: return 0
-    return pd.to_numeric(pd.DataFrame(data)[key], errors='coerce').fillna(0).sum()
-
-# ======================================================
-# 2. PHASE 1: PHYSICAL WALKTHROUGH (UNIFICADA)
-# ======================================================
-st.title("📏 Inspection & Quote Master")
-st.subheader("📍 Phase 1: Physical Walkthrough")
-
-d_col1, d_col2 = st.columns(2)
-
-with d_col1:
-    with st.container(border=True):
-        st.write("**Rooms & Floor Spaces**")
-        f_level = st.selectbox("Select Floor Level", FLOORS)
-        with st.form("room_form", clear_on_submit=True):
-            r_name = st.text_input("Room Name", placeholder="Living Room, Suite A...")
-            c_dim1, c_dim2 = st.columns(2)
-            rw = c_dim1.text_input("Width (ft)")
-            rl = c_dim2.text_input("Length (ft)")
-            if st.form_submit_button("➕ Add Area"):
-                try:
-                    area = float(rw) * float(rl)
-                    st.session_state.rooms.append({"floor": f_level, "name": r_name, "w": rw, "l": rl, "area": int(area)})
-                except: st.error("Invalid dimensions")
+with col_gen:
+    st.subheader("Step 1: Setup")
+    f_count = st.number_input("Total Floors", min_value=1, value=3)
+    s_count = st.number_input("Stairwells", min_value=0, value=2)
+    
+    if st.button("Generate Master Template"):
+        temp = [
+            "--- CONFIGURATION (DO NOT DELETE) ---",
+            "Rate SQFT: 0.30",
+            "Rate Step: 3.50",
+            "---------------------------------------",
+            f"\nBuilding: [Name]", 
+            "Type: Commercial", 
+            f"Total Floors: {f_count}\n"
+        ]
+        for i in range(1, f_count + 1):
+            temp.append(f"Floor {i}:")
+            temp.append("0x0\n")
+        for s in range(1, s_count + 1):
+            temp.append(f"Stairwell {s}:")
+            temp.append("Basement → 1")
+            temp.append("0 steps")
+            temp.append("0x0\n")
+            for f in range(1, f_count):
+                temp.append(f"{f} → {f+1}")
+                temp.append("0 steps")
+                temp.append("0x0\n")
+            temp.append(f"{f_count} → Roof")
+            temp.append("0 steps")
+            temp.append("0x0\n")
         
-        if st.session_state.rooms:
-            df_rooms = pd.DataFrame(st.session_state.rooms)
-            edited_r = st.data_editor(df_rooms, num_rows="dynamic", use_container_width=True, key="editor_rooms")
-            st.session_state.rooms = edited_r.to_dict(orient="records")
+        temp.extend([
+            "Logistics & Site Resources:",
+            "Technicians: 0",
+            "Estimated Hours: 0",
+            "xParking", "xWater Access", "xElectricity", "xBathroom", "xElevator", "xLaundry Room",
+            "\nEquipment Checklist:",
+            "#Truck Mount", "#Portable", "#Cimex",
+            "\nSoil Level Assessment:",
+            "Light", "xMedium", "xHeavy",
+            "\nAdditional Notes:"
+        ])
+        st.session_state["template_text"] = "\n".join(temp)
+    
+    if st.session_state["template_text"]:
+        st.text_area("Master Template:", st.session_state["template_text"], height=400)
 
-with d_col2:
-    with st.container(border=True):
-        st.write("**Stairs & Landings**")
-        with st.form("stair_form", clear_on_submit=True):
-            c_st1, c_st2 = st.columns(2)
-            s_from = c_st1.selectbox("From Level", FLOORS)
-            s_to = c_st2.selectbox("To Level", FLOORS)
-            s_steps = st.text_input("Steps Count")
-            st.write("---")
-            st.write("**Landing Area (W x L):**")
-            l_c1, l_c2 = st.columns(2)
-            lw = l_c1.text_input("W")
-            ll = l_c2.text_input("L")
-            if st.form_submit_button("➕ Add Stairs"):
-                try:
-                    l_area = float(lw or 0) * float(ll or 0)
-                    st.session_state.stairs.append({
-                        "name": f"{s_from} to {s_to}", 
-                        "steps": int(s_steps or 0), 
-                        "l_w": lw or "0", 
-                        "l_l": ll or "0", 
-                        "l_area": int(l_area)
-                    })
-                except: st.error("Invalid input")
-        
-        if st.session_state.stairs:
-            df_stairs = pd.DataFrame(st.session_state.stairs)
-            edited_s = st.data_editor(df_stairs, num_rows="dynamic", use_container_width=True, key="editor_stairs")
-            st.session_state.stairs = edited_s.to_dict(orient="records")
+with col_paste:
+    st.subheader("Step 2: Process Data")
+    user_input = st.text_area("Input Area (Paste here)", height=415)
+    
+    if st.button("Generate Final Tech Report"):
+        if user_input.strip():
+            lines = user_input.splitlines()
+            c_rate_sqft = 0.30; c_rate_step = 3.50
+            h_sqft_total = 0; l_sqft_total = 0; t_steps_total = 0; est_h = 1.0; tech_n = "0"
+            
+            breakdown = {}; log_info = []; equip_info = []; soil_info = []
+            curr_m = ""; curr_sub = ""
+            
+            log_keys = ["Parking", "Water", "Electricity", "Bathroom", "Elevator", "Laundry"]
+            equip_keys = ["Mount", "Portable", "Cimex"]
+            soil_keys = ["Light", "Medium", "Heavy"]
 
-st.divider()
+            for line in lines:
+                clean = line.strip()
+                if not clean or clean.startswith("#"): continue
+                
+                if "Rate SQFT" in clean:
+                    m = re.search(r"(\d+\.?\d*)", clean); (c_rate_sqft := float(m.group(1))) if m else None
+                    continue
+                if "Rate Step" in clean:
+                    m = re.search(r"(\d+\.?\d*)", clean); (c_rate_step := float(m.group(1))) if m else None
+                    continue
+                
+                if any(x in clean for x in ["Floor", "Stairwell", "Logistics", "Equipment", "Soil", "Notes"]):
+                    curr_m = clean.replace(":", ""); curr_sub = ""
+                    if curr_m not in breakdown: breakdown[curr_m] = {"h_sqft": 0, "sub": {}}
+                    continue
+                
+                # --- PROCESAMIENTO DE LOGÍSTICA ---
+                if "Technicians" in clean:
+                    m = re.search(r"(\d+)", clean); tech_n = m.group(1) if m else "0"
+                    log_info.append(f"* Technicians: {tech_n}")
+                    continue
+                if "Estimated Hours" in clean:
+                    m = re.search(r"(\d+\.?\d*)", clean); (est_h := float(m.group(1))) if m else None
+                    log_info.append(f"* {clean}")
+                    continue
 
-# ======================================================
-# 3. PHASE 2: LOGISTICS (DINÁMICA SEGÚN TIPO)
-# ======================================================
-st.subheader("⚙️ Phase 2: Technical Strategy & Logistics")
-p_type = st.radio("Select Project Type:", ["House", "Office"], horizontal=True)
+                is_neg = clean.lower().startswith("x")
+                b_name = clean[1:].strip() if is_neg else clean.strip()
 
-s1, s2, s3 = st.columns(3)
+                if any(k in b_name for k in log_keys):
+                    log_info.append(f"* {b_name}: {'Not Available' if is_neg else 'Available'}")
+                    continue
+                if any(k in b_name for k in equip_keys):
+                    equip_info.append(f"* {b_name}")
+                    continue
+                if any(k in b_name for k in soil_keys):
+                    soil_info.append(f"* Soil Level: {b_name}")
+                    continue
+                
+                # --- CÁLCULOS ---
+                if "0x0" in clean: continue
+                if "→" in clean:
+                    curr_sub = clean
+                    if curr_sub not in breakdown[curr_m]["sub"]: breakdown[curr_m]["sub"][curr_sub] = {"sqft": 0, "steps": 0, "details": []}
+                    continue
+                
+                if "steps" in clean.lower():
+                    m = re.search(r"(\d+)", clean)
+                    if m:
+                        v = int(m.group(1)); t_steps_total += v
+                        if curr_sub: breakdown[curr_m]["sub"][curr_sub]["steps"] += v
+                    continue
+                
+                dims = re.findall(r"(\d+\.?\d*)x(\d+\.?\d*)", clean)
+                if dims:
+                    sub_total = sum(float(w) * float(l) for w, l in dims)
+                    if "Stairwell" in curr_m or "→" in curr_sub:
+                        l_sqft_total += sub_total
+                        if curr_sub:
+                            breakdown[curr_m]["sub"][curr_sub]["sqft"] += sub_total
+                            breakdown[curr_m]["sub"][curr_sub]["details"].append(clean)
+                    else:
+                        h_sqft_total += sub_total
+                        if curr_m:
+                            breakdown[curr_m]["h_sqft"] += sub_total
+                            if "details" not in breakdown[curr_m]: breakdown[curr_m]["details"] = []
+                            breakdown[curr_m]["details"].append(clean)
 
-with s1:
-    with st.container(border=True):
-        st.write("**Labor Assignment**")
-        techs = st.text_input("Technicians Assigned", placeholder="e.g. 2")
-        hours = st.text_input("Estimated Hours", placeholder="e.g. 4.5")
-        shift = ""
-        if p_type == "Office":
-            shift = st.selectbox("Shift Schedule", ["Regular Hours", "After Hours", "Weekends"])
+            # --- AUDITORÍA ---
+            st.session_state.audit_lines_h = []
+            st.session_state.audit_lines_s = []
+            for m, data in breakdown.items():
+                if "Floor" in m and data["h_sqft"] > 0:
+                    ops = " + ".join(data["details"])
+                    st.session_state.audit_lines_h.append(f"**{m}:** `{ops}` = **{data['h_sqft']:.2f} ft²** | Subtotal: **${data['h_sqft']*c_rate_sqft:.2f}**")
+                if "Stairwell" in m:
+                    for s, v in data["sub"].items():
+                        if v["sqft"] > 0 or v["steps"] > 0:
+                            ops = " + ".join(v["details"]) if v["details"] else "0x0"
+                            cost = (v["sqft"] * c_rate_sqft) + (v["steps"] * c_rate_step)
+                            st.session_state.audit_lines_s.append(f"**{m} ({s}):** `{ops}` (**{v['sqft']:.2f} ft²**) + **{v['steps']} steps** = **${cost:.2f}**")
 
-with s2:
-    with st.container(border=True):
-        if p_type == "Office":
-            st.write("**Logistics & Access**")
-            water = st.checkbox("Water Source Provided", value=True)
-            elev = st.checkbox("Elevator Access")
-            parking = st.radio("Parking Status", ["Easy", "Medium", "Difficult"], horizontal=True)
-            soil = st.radio("Soil Level", ["Light", "Medium", "Heavy Restoration"], horizontal=True)
-        else:
-            st.write("**Home Conditions**")
-            soil = st.radio("Soil Level", ["Light", "Medium", "Heavy Restoration"], horizontal=True)
-            pet_stains = st.checkbox("Pet Stains/Odors Present?")
-            parking = st.radio("Parking", ["Street", "Driveway"], horizontal=True)
+            # --- REPORTE FINAL ---
+            inv = ((h_sqft_total + l_sqft_total) * c_rate_sqft) + (t_steps_total * c_rate_step)
+            h_rate = inv / est_h if est_h > 0 else 0
+            b_match = re.search(r'Building: \[(.*?)\]', user_input); title = b_match.group(1) if b_match else "BUILDING"
+            res = [f"--- {title.upper()} - TECH REPORT ---", "\n1. SERVICE SUMMARY"]
+            res.append(f"* Hallways Area: {h_sqft_total:.2f} ft²\n* Landings Area: {l_sqft_total:.2f} ft²\n* Total Steps: {t_steps_total} units")
+            
+            if log_info:
+                res.append("\n2. LOGISTICS & SITE STATUS")
+                res.extend(log_info)
+            if equip_info:
+                res.append("\n3. EQUIPMENT USED")
+                res.extend(equip_info)
+            if soil_info:
+                res.append("\n4. SOIL ASSESSMENT")
+                res.extend(soil_info)
+            
+            res.append("\n5. PRODUCTION BREAKDOWN")
+            for m, data in breakdown.items():
+                if (data.get("h_sqft", 0) > 0 or data.get("sub")) and not any(k in m for k in ["Logistics", "Equipment", "Soil", "Notes", "CONFIGURATION"]):
+                    if data.get("h_sqft", 0) > 0: res.append(f"• {m}: {data['h_sqft']:.2f} ft²")
+                    else: res.append(f"• {m}:")
+                    for s, v in data.get("sub", {}).items():
+                        if v["sqft"] > 0 or v["steps"] > 0: res.append(f"   - {s}: {v['sqft']:.2f} ft² | {v['steps']} steps")
+            
+            res.append(f"\n6. FINAL SUMMARY\n**PROJECT TOTAL: ${inv:.2f}**\n**HOURLY PROFIT: ${h_rate:.2f}/hr**")
+            st.session_state.final_report = "\n".join(res)
 
-with s3:
-    with st.container(border=True):
-        st.write("**Technical Strategy**")
-        selected_eq = [eq for eq in EQUIPMENT_OPTIONS if st.checkbox(eq, key=f"cb_{eq}")]
-        selected_chem = st.multiselect("Chemistry Suggested", PRODUCT_OPTIONS)
-        notes = st.text_area("Field Notes (Technical Observations):")
-
-# ======================================================
-# 4. GENERACIÓN DE REPORTES DIFERENCIADOS
-# ======================================================
-total_rooms_sqft = safe_sum(st.session_state.rooms, 'area')
-total_steps_count = safe_sum(st.session_state.stairs, 'steps')
-total_landing_sqft = safe_sum(st.session_state.stairs, 'l_area')
-global_surface = int(total_rooms_sqft + total_landing_sqft)
-
-if p_type == "Office":
-    # --- REPORTE OFFICE (CORPORATIVO) ---
-    report = [
-        f"*** OFFICE SERVICE INSPECTION & QUOTE ***",
-        f"Date: 03/18/2026",
-        "--------------------------------------------------------------",
-        "I. SCOPE OF WORK SUMMARY",
-        f" - Total Surface Area: {global_surface} sq ft",
-        f" - Total Steps: {int(total_steps_count)}",
-        f" - Soil Level: {soil}",
-        "--------------------------------------------------------------",
-        "II. LABOR & ESTIMATED TIME",
-        f" - Technicians Assigned: {techs if techs else '0'} Specialists",
-        f" - Estimated Production Time: {hours if hours else '0'} Hours",
-        f" - Shift Schedule: {shift}",
-        "--------------------------------------------------------------",
-        "III. LOGISTICS & SITE ACCESS",
-        f" - Water Source: {'Provided on-site' if water else 'To be determined'}",
-        f" - Elevator Access: {'Yes' if elev else 'No'}",
-        f" - Parking: {parking}",
-        "--------------------------------------------------------------",
-        "IV. TECHNICAL STRATEGY",
-        f" - Equipment: {', '.join(selected_eq) if selected_eq else 'None'}",
-        f" - Chemistry Suggested: {', '.join(selected_chem) if selected_chem else 'None'}",
-        f" - Field Notes: {notes if notes else 'No specific observations.'}",
-        "--------------------------------------------------------------"
-    ]
-else:
-    # --- REPORTE HOUSE (RESIDENCIAL) ---
-    report = [
-        f"*** RESIDENTIAL CLEANING ESTIMATE ***",
-        f"Date: 03/18/2026",
-        "--------------------------------------------------------------",
-        "SUMMARY OF AREAS",
-        f" - Total Surface to Clean: {global_surface} sq ft",
-        f" - Total Steps: {int(total_steps_count)}",
-        f" - Soil Condition: {soil}",
-        f" - Pet Treatment: {'Required' if pet_stains else 'Not requested'}",
-        "--------------------------------------------------------------",
-        "SERVICE DETAILS",
-        f" - Estimated Time: {hours if hours else '0'} Hours",
-        f" - Equipment: {', '.join(selected_eq) if selected_eq else 'Standard'}",
-        f" - Products: {', '.join(selected_chem) if selected_chem else 'Eco-friendly Professional'}",
-        "--------------------------------------------------------------",
-        "TECHNICAL NOTES",
-        f"> {notes if notes else 'Areas ready for professional cleaning.'}",
-        "--------------------------------------------------------------"
-    ]
-
-# Sección común: Desglose Matemático
-report.append("DETAILED BREAKDOWN:")
-for f in FLOORS:
-    f_rooms = [r for r in st.session_state.rooms if r.get('floor') == f]
-    if f_rooms:
-        report.append(f"\n[{f.upper()}]")
-        for r in f_rooms:
-            report.append(f" - {r.get('name', 'Area')}: {r.get('w',0)}ft x {r.get('l',0)}ft = {int(r.get('area',0))} sq ft")
-
-if st.session_state.stairs:
-    report.append("\n[STAIRS & LANDINGS]")
-    for s in st.session_state.stairs:
-        if s.get('steps', 0) > 0 or s.get('l_area', 0) > 0:
-            report.append(f" - {s.get('name')}: {int(s.get('steps',0))} steps | Landing: {s.get('l_w',0)}ft x {s.get('l_l',0)}ft = {int(s.get('l_area',0))} sq ft")
-
-report.append("--------------------------------------------------------------")
-summary_text = "\n".join(report)
-
-# ======================================================
-# 5. UI: REPORTE FINAL Y BOTONES
-# ======================================================
-st.divider()
-with st.container(border=True):
-    st.subheader(f"📋 Final Report: {p_type}")
-    st.text_area("Ready for Client:", summary_text, height=450)
-    components.html(f"""
-        <button style="padding:12px;background-color:#007bff;color:white;border:none;border-radius:6px;width:100%;font-weight:bold;cursor:pointer;font-family:sans-serif;"
-        onclick="navigator.clipboard.writeText(`{summary_text}`); this.innerText='✓ Report Copied to Clipboard'; this.style.backgroundColor='#28a745';">
-        📎 Copy Executive Report</button>""", height=70)
-
-if st.button("🗑️ Reset All Data"):
-    for k in list(st.session_state.keys()): del st.session_state[k]
-    st.rerun()
+# --- VISUALIZACIÓN ---
+if st.session_state.final_report:
+    st.markdown("---")
+    st.subheader("🔍 1. Audit Dashboard (Friendly View)")
+    st.markdown("#### 🏢 Hallways & Floors")
+    if st.session_state.audit_lines_h:
+        for line in st.session_state.audit_lines_h: st.write(line)
+    else: st.write("*No hallways processed.*")
+    
+    st.markdown("#### 🪜 Staircases (Landings & Steps)")
+    if st.session_state.audit_lines_s:
+        for line in st.session_state.audit_lines_s: st.write(line)
+    else: st.write("*No stairwells processed.*")
+    
+    st.markdown("---")
+    st.subheader("📋 2. Final Tech Report")
+    st.text_area("Ready to copy:", st.session_state.final_report, height=350)
+    components.html(f"""<button id="copyR" style="width:100%;padding:10px;background:#2196F3;color:white;border:none;border-radius:5px;cursor:pointer;font-weight:bold;font-family:sans-serif;">Copy Final Report</button>
+        <script>document.getElementById("copyR").onclick = () => {{ navigator.clipboard.writeText(`{st.session_state['final_report'].replace('`','\\`').replace('$', '\\$')}`); document.getElementById("copyR").innerText = "✅ Copied!"; }};</script>""", height=50)
