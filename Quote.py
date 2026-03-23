@@ -5,7 +5,7 @@ import re
 st.set_page_config(page_title="Tech Service Report", layout="wide")
 st.title("🛠️ Tech Service Report & Audit")
 
-# --- INITIAL SESSION STATE ---
+# --- SESSION STATE ---
 if "template_text" not in st.session_state:
     st.session_state["template_text"] = ""
 if "final_report" not in st.session_state:
@@ -71,31 +71,35 @@ with col_paste:
     
     if st.button("Generate Final Tech Report"):
         if user_input.strip():
-            # --- Procesamiento simplificado para ejemplo ---
+            # --- Simulación de procesamiento para ejemplo ---
             st.session_state.final_report = f"Processed report for building:\n{user_input}"
 
-# --- VISUALIZACIÓN ---
+# --- FINAL REPORT VISUALIZATION ---
 if st.session_state.final_report:
     st.markdown("---")
-    st.subheader("📋 2. Final Tech Report")
-    st.text_area("Ready to copy:", st.session_state.final_report, height=350)
+    st.subheader("📋 Final Tech Report")
+    st.text_area("You can review it here:", st.session_state.final_report, height=350)
 
-    # --- BOTÓN DE COPIADO (como en tu último ejemplo) ---
-    components.html(
-        f"""
-        <button
-            id="copyBtn"
-            style="padding:8px 16px;font-size:16px;background-color:#1f77b4;color:white;
-                   border:none;border-radius:4px;cursor:pointer;"
-            onclick="
-                navigator.clipboard.writeText(`{st.session_state.final_report}`);
-                const btn = document.getElementById('copyBtn');
-                btn.innerText = '✓ Copied';
-                btn.style.backgroundColor = '#2ca02c';
-            "
-        >
-            📎 Copy Final Report
-        </button>
-        """,
-        height=50
-    )
+    # --- BOTÓN DE COPIADO COMPATIBLE CON IPAD/IPHONE ---
+    # Método: textarea temporal + execCommand('copy')
+    safe_text = st.session_state.final_report.replace("`", "\\`").replace("\n", "\\n")
+    components.html(f"""
+    <button
+        id="copyBtn"
+        style="padding:8px 16px;font-size:16px;background-color:#1f77b4;color:white;
+               border:none;border-radius:4px;cursor:pointer;"
+        onclick="
+            var textArea = document.createElement('textarea');
+            textArea.value = `{safe_text}`;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            const btn = document.getElementById('copyBtn');
+            btn.innerText='✅ Copied';
+            btn.style.backgroundColor='#2ca02c';
+        "
+    >
+        📎 Copy Final Report
+    </button>
+    """, height=50)
