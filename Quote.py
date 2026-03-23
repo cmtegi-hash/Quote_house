@@ -212,7 +212,7 @@ if st.session_state.final_report:
     st.subheader("📋 2. Final Tech Report")
     st.text_area("Ready to copy:", st.session_state.final_report, height=350)
 
-    # --- COPY BUTTON SEGURO PARA IPAD/IPHONE ---
+    # --- BOTÓN DE COPIADO SEGURO PARA IPAD/IPHONE ---
     button_id = f"copyBtn_{uuid.uuid4().hex}"
     safe_text = json.dumps(st.session_state.final_report)
 
