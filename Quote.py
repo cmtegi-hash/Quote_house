@@ -212,13 +212,13 @@ if st.session_state.final_report:
     st.subheader("📋 2. Final Tech Report")
     st.text_area("Ready to copy:", st.session_state.final_report, height=350)
 
-    # --- COPY BUTTON ROBUSTO PARA iOS/IPAD ---
+    # --- COPY BUTTON SEGURO PARA IPAD/IPHONE ---
     button_id = f"copyBtn_{uuid.uuid4().hex}"
     safe_text = json.dumps(st.session_state.final_report)
 
     components.html(f"""
-        <button id="{button_id}" style="width:100%;padding:10px;background:#2196F3;color:white;
-               border:none;border-radius:5px;cursor:pointer;font-weight:bold;font-family:sans-serif;">
+        <button id="{button_id}" style="width:100%;padding:12px;background:#2196F3;color:white;
+                border:none;border-radius:6px;cursor:pointer;font-weight:bold;font-family:sans-serif;">
             Copy Final Report
         </button>
 
