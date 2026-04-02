@@ -5,9 +5,6 @@ import re
 
 st.set_page_config(page_title="Tech Service Tools", layout="wide")
 
-# ======================================================
-# SESSION STATE — navegación
-# ======================================================
 if "app_mode" not in st.session_state:
     st.session_state.app_mode = None
 
@@ -24,17 +21,11 @@ if st.session_state.app_mode is None:
 
     _, col_c1, col_c2, _ = st.columns([1, 2, 2, 1])
 
-    CARD_STYLE = """
-        border: 1px solid #ddd;
-        border-radius: 12px;
-        padding: 2rem;
-        text-align: center;
-        min-height: 160px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-    """
+    CARD_STYLE = (
+        "border:1px solid #ddd;border-radius:12px;padding:2rem;text-align:center;"
+        "min-height:160px;display:flex;flex-direction:column;"
+        "align-items:center;justify-content:center;"
+    )
 
     with col_c1:
         st.markdown(f"""
@@ -82,7 +73,7 @@ if st.session_state.app_mode == "commercial":
     SKIP_DIM = "0x0"
     FLAG_SKIP = "#"
     FLAG_UNAVAIL = "x"
-    LOG_KEYS = ["Parking", "Water", "Electricity", "Bathroom", "Elevator", "Laundry"]
+    LOG_KEYS = ["Parking", "Bathroom", "Elevator", "Laundry"]
     EQUIP_KEYS = ["Mount", "Portable", "Cimex"]
     SOIL_KEYS = ["Light", "Medium", "Heavy"]
     SECTION_KEYS = ["Floor", "Stairwell", "Logistics", "Equipment", "Soil", "Notes"]
@@ -105,7 +96,7 @@ if st.session_state.app_mode == "commercial":
     def parse_input(lines):
         sqft_rate = 0.30; step_rate = 3.50
         hallway_sqft = 0.0; landing_sqft = 0.0
-        total_steps = 0; est_hours = 1.0; tech_count = "0"
+        total_steps = 0; est_hours = 1.0; tech_count = 1
         breakdown = {}; available = []; not_available = []
         equip_used = []; soil_levels = []; notes = []
         audit_log = []; current_section = ""; current_subsection = ""
@@ -138,21 +129,20 @@ if st.session_state.app_mode == "commercial":
             if clean.startswith("---"):
                 continue
 
-            if any(x in clean for x in SECTION_KEYS):
+            if any(x in clean for x in SECTION_KEYS) and not clean.startswith("Total Floors"):
                 current_section = clean.replace(":", "").strip()
                 current_subsection = ""
                 if current_section not in breakdown:
                     breakdown[current_section] = {"sqft": 0.0, "details": [], "sub": {}}
                 continue
 
-            # Capture notes lines
             if "Notes" in current_section:
                 notes.append(clean)
                 continue
 
             if "Technicians" in clean:
                 m = re.search(r"(\d+)", clean)
-                tech_count = m.group(1) if m else "0"
+                tech_count = int(m.group(1)) if m else 1
                 continue
 
             if "Estimated Hours" in clean:
@@ -236,35 +226,47 @@ if st.session_state.app_mode == "commercial":
         }
 
     def build_report(d, building_name):
-        sqft_rate = d["sqft_rate"]; step_rate = d["step_rate"]
-        inv = ((d["hallway_sqft"] + d["landing_sqft"]) * sqft_rate) + (d["total_steps"] * step_rate)
         sep = "=" * 40
         res = []
         res.extend([sep, "TECH SERVICE REPORT", f"Building: {building_name.upper()}", sep, ""])
+
+        # Service summary
         res.extend(["SERVICE SUMMARY", "-" * 24])
         res.extend([
             f"Hallways Area:    {d['hallway_sqft']:.2f} ft2",
             f"Landings Area:    {d['landing_sqft']:.2f} ft2",
             f"Total Steps:      {d['total_steps']} units", "",
         ])
+
+        # Floors — show "No carpet" if sqft is 0
         breakdown = d["breakdown"]
         for section, data in breakdown.items():
-            if "Floor" in section and data["sqft"] > 0:
-                res.append(f"{section}:  {data['sqft']:.2f} ft2")
+            if "Floor" in section:
+                if data["sqft"] > 0:
+                    res.append(f"{section}:  {data['sqft']:.2f} ft2")
+                else:
+                    res.append(f"{section}:  No carpet")
         res.append("")
+
+        # Stairwells — show "No carpet" if sqft is 0
         for section, data in breakdown.items():
             if "Stairwell" in section:
                 sub_lines = []
                 for subsec, v in data["sub"].items():
-                    if v["sqft"] > 0 or v["steps"] > 0:
-                        parts = []
-                        if v["sqft"] > 0: parts.append(f"{v['sqft']:.2f} ft2")
-                        if v["steps"] > 0: parts.append(f"{v['steps']} steps")
-                        sub_lines.append(f"{subsec}:  {', '.join(parts)}")
+                    parts = []
+                    if v["sqft"] > 0:
+                        parts.append(f"{v['sqft']:.2f} ft2")
+                    else:
+                        parts.append("No carpet")
+                    if v["steps"] > 0:
+                        parts.append(f"{v['steps']} steps")
+                    sub_lines.append(f"{subsec}:  {', '.join(parts)}")
                 if sub_lines:
                     res.append(f"-- {section} --")
                     res.extend(sub_lines)
                     res.append("")
+
+        # Logistics
         res.extend(["LOGISTICS & SITE STATUS", "-" * 24,
                     f"Technicians:      {d['tech_count']}",
                     f"Estimated Hours:  {d['est_hours']}"])
@@ -275,15 +277,18 @@ if st.session_state.app_mode == "commercial":
             res.append(f"Not Available:    {', '.join(clean_na)}")
         if d["equip_used"]:
             res.append(f"Equipment Used:   {', '.join(d['equip_used'])}")
-        # Notes after logistics
-        if d["notes"]:
-            res.extend(["", "ADDITIONAL NOTES", "-" * 24])
-            res.extend(d["notes"])
+
+        # Soil
         if d["soil_levels"]:
             res.extend(["", "SOIL ASSESSMENT", "-" * 24,
                         f"Soil Level:       {', '.join(d['soil_levels'])}"])
-        res.extend(["", "FINAL SUMMARY", "-" * 24,
-                    f"Project Total:    ${inv:.2f}", "", sep])
+
+        # Notes — last section, no amount after this
+        if d["notes"]:
+            res.extend(["", "ADDITIONAL NOTES", "-" * 24])
+            res.extend(d["notes"])
+
+        res.extend(["", sep])
         return "\n".join(res)
 
     # ── UI ────────────────────────────────────────────────
@@ -312,8 +317,7 @@ if st.session_state.app_mode == "commercial":
             temp.extend([
                 "Logistics & Site Resources:",
                 "Technicians: 0", "Estimated Hours: 0",
-                "xParking", "xWater Access", "xElectricity",
-                "xBathroom", "xElevator", "xLaundry Room",
+                "xParking", "xBathroom", "xElevator", "xLaundry Room",
                 "\nEquipment Checklist:",
                 "#Truck Mount", "#Portable", "#Cimex",
                 "\nSoil Level Assessment:",
@@ -348,9 +352,9 @@ if st.session_state.app_mode == "commercial":
         breakdown = d["breakdown"]
         sqft_rate = d["sqft_rate"]; step_rate = d["step_rate"]
         inv = ((d["hallway_sqft"] + d["landing_sqft"]) * sqft_rate) + (d["total_steps"] * step_rate)
-        h_rate = inv / d["est_hours"] if d["est_hours"] > 0 else 0
-        tech_n = int(d["tech_count"]) if d["tech_count"].isdigit() else 1
-        per_tech = h_rate / tech_n if tech_n > 0 else 0
+        tech_n = d["tech_count"] if d["tech_count"] > 0 else 1
+        est_h = d["est_hours"] if d["est_hours"] > 0 else 1
+        h_rate = inv / (est_h * tech_n)
 
         st.markdown("---")
         st.subheader("🔍 1. Audit Dashboard (Friendly View)")
@@ -359,33 +363,38 @@ if st.session_state.app_mode == "commercial":
         m1.metric("Hallway ft²", f"{d['hallway_sqft']:.2f}")
         m2.metric("Landing ft²", f"{d['landing_sqft']:.2f}")
         m3.metric("Steps", d["total_steps"])
-        m4.metric("Est. Total", f"${inv:.2f}")
-        m5.metric("Hourly Profit", f"${h_rate:.2f}/hr")
+        m4.metric("Project Total", f"${inv:.2f}")
+        m5.metric("$/hr per tech", f"${h_rate:.2f}")
 
         st.markdown("#### 🏢 Hallways & Floors")
         floor_found = False
         for section, data in breakdown.items():
-            if "Floor" in section and data["sqft"] > 0:
+            if "Floor" in section:
                 floor_found = True
-                dims_str = " + ".join(data["details"])
-                subtotal = data["sqft"] * sqft_rate
-                st.write(f"**{section}:** {dims_str} = **{data['sqft']:.2f} ft²** | Subtotal: **${subtotal:.2f}**")
+                if data["sqft"] > 0:
+                    dims_str = " + ".join(data["details"])
+                    subtotal = data["sqft"] * sqft_rate
+                    st.write(f"**{section}:** {dims_str} = **{data['sqft']:.2f} ft²** | Subtotal: **${subtotal:.2f}**")
+                else:
+                    st.write(f"**{section}:** No carpet")
         if not floor_found:
-            st.write("*No hallways processed.*")
+            st.write("*No floors processed.*")
 
         st.markdown("#### 🪜 Staircases (Landings & Steps)")
         stair_found = False
         for section, data in breakdown.items():
             if "Stairwell" in section:
                 for subsec, v in data["sub"].items():
-                    if v["sqft"] > 0 or v["steps"] > 0:
-                        stair_found = True
-                        dims_str = " + ".join(v["details"]) if v["details"] else "—"
+                    stair_found = True
+                    if v["sqft"] > 0:
+                        dims_str = " + ".join(v["details"])
                         cost = (v["sqft"] * sqft_rate) + (v["steps"] * step_rate)
                         st.write(
                             f"**{section} ({subsec}):** {dims_str} "
                             f"(**{v['sqft']:.2f} ft²**) + **{v['steps']} steps** = **${cost:.2f}**"
                         )
+                    else:
+                        st.write(f"**{section} ({subsec}):** No carpet · **{v['steps']} steps**")
         if not stair_found:
             st.write("*No stairwells processed.*")
 
